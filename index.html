@@ -3,131 +3,79 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>RSV1.03h - RSVP Reader with Replay, WPM, Paste</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>RSVP Reader - RSV1.04a</title>
   <style>
-    body {
-      font-family: sans-serif;
-      background: #f9f9f9;
-      padding: 2rem;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-    }
-    textarea {
-      width: 100%;
-      max-width: 600px;
-      height: 200px;
-      font-size: 16px;
-      padding: 1rem;
-      border-radius: 8px;
-      border: 1px solid #ccc;
-      margin-bottom: 1rem;
-    }
-    #rsvp-box {
-      font-size: 32px;
-      font-weight: bold;
-      background: #fff;
-      border: 2px solid #333;
-      padding: 1rem 2rem;
-      border-radius: 12px;
-      margin: 2rem 0;
-      min-height: 60px;
-    }
-    .controls button {
-      padding: 0.6rem 1.2rem;
-      font-size: 16px;
-      margin: 0.3rem;
-      border: none;
-      border-radius: 6px;
-      cursor: pointer;
-    }
-    .controls {
-      margin-top: 1rem;
-      display: flex;
-      flex-wrap: wrap;
-      justify-content: center;
-    }
-    .slider {
-      margin-top: 1rem;
-      display: flex;
-      align-items: center;
-      gap: 1rem;
-    }
+    body { font-family: sans-serif; display: flex; flex-direction: column; align-items: center; padding: 2rem; background: #f4f4f4; }
+    textarea { width: 80%; height: 200px; font-size: 1rem; padding: 0.5rem; margin-bottom: 1rem; }
+    #display { font-size: 3rem; margin: 2rem; min-height: 3.5rem; }
+    input[type=range] { width: 300px; }
+    button { padding: 0.5rem 1rem; margin: 0.3rem; }
   </style>
 </head>
 <body>
-  <h1>RSV1.03h - RSVP Reader</h1>
-  <textarea id="text-input" placeholder="Paste or type your text here..."></textarea>
-
-  <div class="controls">
-    <button onclick="pasteFromClipboard()">📋 Paste</button>
-    <button onclick="startRSVP()">▶️ Start</button>
-    <button onclick="stopRSVP()">⏹ Stop</button>
-    <button onclick="replayRSVP()">🔁 Replay</button>
+  <h1>RSVP Reader (v1.04a)</h1>
+  <textarea id="inputText" placeholder="Paste your text here..."></textarea>
+  <div>
+    <button onclick="startReading()">Start</button>
+    <button onclick="replay()">Replay</button>
+    <button onclick="pasteClipboard()">Paste from Clipboard</button>
   </div>
-
-  <div class="slider">
-    <label for="wpmRange">Speed (WPM):</label>
-    <input type="range" id="wpmRange" min="100" max="600" step="10" value="240" onchange="updateWPM()">
-    <span id="wpmDisplay">240</span>
-  </div>
-
-  <div id="rsvp-box"></div>
+  <p>WPM: <span id="wpmDisplay">300</span></p>
+  <input type="range" min="100" max="1000" value="300" step="10" id="wpmSlider" />
+  <div id="display"></div>
 
   <script>
-    let rsvpTimeout;
-    let currentIndex = 0;
-    let wordArray = [];
-    let baseWPM = 240;
+    const display = document.getElementById('display');
+    const input = document.getElementById('inputText');
+    const slider = document.getElementById('wpmSlider');
+    const wpmDisplay = document.getElementById('wpmDisplay');
+    let words = [], index = 0, timer;
 
-    function getPacing(word) {
-      let baseDelay = 60000 / baseWPM;
-      if (word.endsWith(',')) return baseDelay + 150;
-      if (word.endsWith('.')) return baseDelay + 300;
-      if (word.endsWith('?') || word.endsWith('!')) return baseDelay + 250;
-      return baseDelay;
+    slider.oninput = () => {
+      wpmDisplay.textContent = slider.value;
+    };
+
+    function calculateDelay(word, baseDelay) {
+      const punc = word.slice(-1);
+      let extra = 0;
+      if (punc === ',') extra = 150;
+      else if (punc === '.') extra = 300;
+      else if (punc === '?' || punc === '!') extra = 350;
+      else if (punc === ';' || punc === ':') extra = 200;
+      else if (punc === '—' || punc === '–') extra = 250;
+      else if (word.endsWith('...')) extra = 400;
+      return baseDelay + extra;
     }
 
-    function startRSVP() {
-      const input = document.getElementById("text-input").value;
-      wordArray = input.split(/\s+/);
-      currentIndex = 0;
-      if (rsvpTimeout) clearTimeout(rsvpTimeout);
-      document.getElementById("rsvp-box").innerText = "";
-      runNextWord();
+    function showWord() {
+      if (index >= words.length) return;
+      const word = words[index++];
+      display.textContent = word;
+      const baseDelay = 60000 / parseInt(slider.value);
+      const delay = calculateDelay(word, baseDelay);
+      timer = setTimeout(showWord, delay);
     }
 
-    function stopRSVP() {
-      clearTimeout(rsvpTimeout);
+    function startReading() {
+      words = input.value.trim().split(/\s+/);
+      index = 0;
+      clearTimeout(timer);
+      showWord();
     }
 
-    function replayRSVP() {
-      stopRSVP();
-      currentIndex = 0;
-      runNextWord();
+    function replay() {
+      index = 0;
+      clearTimeout(timer);
+      showWord();
     }
 
-    function runNextWord() {
-      if (currentIndex >= wordArray.length) return;
-      const word = wordArray[currentIndex];
-      document.getElementById("rsvp-box").innerText = word;
-      currentIndex++;
-      rsvpTimeout = setTimeout(runNextWord, getPacing(word));
-    }
-
-    function updateWPM() {
-      const slider = document.getElementById("wpmRange");
-      baseWPM = parseInt(slider.value);
-      document.getElementById("wpmDisplay").innerText = slider.value;
-    }
-
-    async function pasteFromClipboard() {
+    async function pasteClipboard() {
       try {
         const text = await navigator.clipboard.readText();
-        document.getElementById("text-input").value = text;
+        input.value = text;
       } catch (err) {
-        alert("Failed to paste: " + err);
+        alert("Clipboard access denied.");
       }
     }
   </script>
