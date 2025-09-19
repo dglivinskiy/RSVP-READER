@@ -4,78 +4,54 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>RSVP Reader - RSV1.04a</title>
+  <title>RSVP Reader - RSV1.04b (Calibrate Mode)</title>
   <style>
-    body { font-family: sans-serif; display: flex; flex-direction: column; align-items: center; padding: 2rem; background: #f4f4f4; }
-    textarea { width: 80%; height: 200px; font-size: 1rem; padding: 0.5rem; margin-bottom: 1rem; }
-    #display { font-size: 3rem; margin: 2rem; min-height: 3.5rem; }
-    input[type=range] { width: 300px; }
-    button { padding: 0.5rem 1rem; margin: 0.3rem; }
+    body { font-family: sans-serif; display: flex; flex-direction: column; align-items: center; padding: 2rem; background: #f0f0f0; }
+    textarea { width: 80%; height: 150px; font-size: 1rem; margin: 1rem 0; }
+    #display { font-size: 2.5rem; margin: 1.5rem 0; min-height: 3rem; }
+    button { padding: 0.5rem 1rem; margin: 0.5rem; }
+    audio { margin-top: 1rem; }
   </style>
 </head>
 <body>
-  <h1>RSVP Reader (v1.04a)</h1>
-  <textarea id="inputText" placeholder="Paste your text here..."></textarea>
+  <h1>RSVP Reader v1.04b</h1>
+  <p><strong>Calibrate Mode:</strong> Read aloud to personalize your speed</p>
+
+  <textarea id="calibrateText">It is a truth universally acknowledged, that a single man in possession of a good fortune, must be in want of a wife.</textarea>
+
   <div>
-    <button onclick="startReading()">Start</button>
-    <button onclick="replay()">Replay</button>
-    <button onclick="pasteClipboard()">Paste from Clipboard</button>
+    <button onclick="startRecording()">Start Recording</button>
+    <button onclick="stopRecording()">Stop</button>
   </div>
-  <p>WPM: <span id="wpmDisplay">300</span></p>
-  <input type="range" min="100" max="1000" value="300" step="10" id="wpmSlider" />
-  <div id="display"></div>
+
+  <audio id="player" controls></audio>
 
   <script>
-    const display = document.getElementById('display');
-    const input = document.getElementById('inputText');
-    const slider = document.getElementById('wpmSlider');
-    const wpmDisplay = document.getElementById('wpmDisplay');
-    let words = [], index = 0, timer;
+    let mediaRecorder, audioChunks = [];
 
-    slider.oninput = () => {
-      wpmDisplay.textContent = slider.value;
-    };
+    async function startRecording() {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaRecorder = new MediaRecorder(stream);
+      audioChunks = [];
 
-    function calculateDelay(word, baseDelay) {
-      const punc = word.slice(-1);
-      let extra = 0;
-      if (punc === ',') extra = 150;
-      else if (punc === '.') extra = 300;
-      else if (punc === '?' || punc === '!') extra = 350;
-      else if (punc === ';' || punc === ':') extra = 200;
-      else if (punc === '—' || punc === '–') extra = 250;
-      else if (word.endsWith('...')) extra = 400;
-      return baseDelay + extra;
+      mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
+      mediaRecorder.onstop = () => {
+        const blob = new Blob(audioChunks, { type: 'audio/webm' });
+        const url = URL.createObjectURL(blob);
+        document.getElementById('player').src = url;
+
+        // Placeholder: eventually send to processor for timestamp analysis
+        console.log("Recording complete. Blob size:", blob.size);
+      };
+
+      mediaRecorder.start();
+      console.log("Recording started...");
     }
 
-    function showWord() {
-      if (index >= words.length) return;
-      const word = words[index++];
-      display.textContent = word;
-      const baseDelay = 60000 / parseInt(slider.value);
-      const delay = calculateDelay(word, baseDelay);
-      timer = setTimeout(showWord, delay);
-    }
-
-    function startReading() {
-      words = input.value.trim().split(/\s+/);
-      index = 0;
-      clearTimeout(timer);
-      showWord();
-    }
-
-    function replay() {
-      index = 0;
-      clearTimeout(timer);
-      showWord();
-    }
-
-    async function pasteClipboard() {
-      try {
-        const text = await navigator.clipboard.readText();
-        input.value = text;
-      } catch (err) {
-        alert("Clipboard access denied.");
+    function stopRecording() {
+      if (mediaRecorder && mediaRecorder.state !== "inactive") {
+        mediaRecorder.stop();
+        console.log("Recording stopped.");
       }
     }
   </script>
