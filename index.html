@@ -4,33 +4,44 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>RSVP Reader - RSV1.04d</title>
+  <title>RSVP Reader - RSV1.04e</title>
   <style>
-    body { font-family: sans-serif; display: flex; flex-direction: column; align-items: center; padding: 2rem; background: #f5f9ff; }
-    textarea, input[type=number] { width: 80%; font-size: 1rem; margin: 1rem 0; }
-    #display { font-size: 2rem; font-weight: bold; margin: 2rem; min-height: 3rem; }
-    #log { white-space: pre-wrap; background: #fff; border: 1px solid #ccc; padding: 1rem; width: 80%; height: 150px; overflow-y: scroll; }
-    button { padding: 0.5rem 1rem; margin: 0.5rem; }
+    body { font-family: sans-serif; background: #f7f9fc; padding: 2rem; display: flex; flex-direction: column; align-items: center; }
+    textarea, input { width: 80%; font-size: 1rem; margin: 1rem 0; }
+    button { padding: 0.5rem 1rem; margin: 0.3rem; }
+    #display { font-size: 2rem; margin: 2rem 0; }
+    #log { border: 1px solid #ccc; background: #fff; padding: 1rem; width: 80%; height: 150px; overflow-y: scroll; white-space: pre-wrap; }
+    audio { margin-top: 1rem; }
   </style>
 </head>
 <body>
-  <h1>RSVP Reader v1.04d</h1>
-  <p><strong>Paste text and set speed (WPM). Punctuation affects pause timing.</strong></p>
+  <h1>RSVP Reader v1.04e (Diagnostic Mode)</h1>
 
   <textarea id="inputText">Sense and Sensibility by Jane Austen. Chapter 1: The family of Dashwood had long been settled in Sussex. Their estate was large, and their residence was at Norland Park...</textarea>
-  <label>Words Per Minute (WPM):</label>
+  <label>WPM:</label>
   <input type="number" id="wpm" value="300" min="100" max="1000" step="10"/>
 
   <div>
     <button onclick="startRSVP()">Start</button>
     <button onclick="stopRSVP()">Stop</button>
+    <button onclick="startRecording()">Start Recording</button>
+    <button onclick="stopRecording()">Stop</button>
+    <button onclick="markWord()">Mark Word</button>
   </div>
 
   <div id="display"></div>
   <div id="log"></div>
+  <audio id="playback" controls></audio>
 
   <script>
     let words = [], current = 0, timer = null;
+    let mediaRecorder, audioChunks = [];
+    let startTime = null;
+
+    function log(text) {
+      document.getElementById("log").textContent += text + "\n";
+      console.log("[LOG]", text);
+    }
 
     function getDelay(word, baseDelay) {
       if (/[.,]/.test(word)) return baseDelay * 2;
@@ -43,22 +54,22 @@
       const text = document.getElementById("inputText").value;
       const wpm = parseInt(document.getElementById("wpm").value);
       const display = document.getElementById("display");
-      const log = document.getElementById("log");
       const delay = 60000 / wpm;
 
       words = text.split(/\s+/);
       current = 0;
-      log.textContent = "Starting RSVP...\n";
+      log("RSVP started at " + new Date().toLocaleTimeString());
 
       function showNext() {
         if (current >= words.length) {
           display.textContent = "";
           clearTimeout(timer);
+          log("RSVP finished.");
           return;
         }
         const word = words[current];
         display.textContent = word;
-        log.textContent += word + "\n";
+        log("Displayed: " + word);
         const nextDelay = getDelay(word, delay);
         current++;
         timer = setTimeout(showNext, nextDelay);
@@ -70,6 +81,39 @@
     function stopRSVP() {
       clearTimeout(timer);
       document.getElementById("display").textContent = "";
+      log("RSVP stopped at " + new Date().toLocaleTimeString());
+    }
+
+    function startRecording() {
+      navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
+        mediaRecorder = new MediaRecorder(stream);
+        audioChunks = [];
+        mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
+        mediaRecorder.onstop = () => {
+          const audioBlob = new Blob(audioChunks);
+          const audioURL = URL.createObjectURL(audioBlob);
+          const playback = document.getElementById("playback");
+          playback.src = audioURL;
+          log("Recording stopped and audio set.");
+        };
+        mediaRecorder.start();
+        startTime = performance.now();
+        log("Recording started.");
+      }).catch(err => {
+        log("Error accessing microphone: " + err.message);
+      });
+    }
+
+    function stopRecording() {
+      if (mediaRecorder && mediaRecorder.state === "recording") {
+        mediaRecorder.stop();
+      }
+    }
+
+    function markWord() {
+      const time = performance.now() - startTime;
+      const ms = Math.round(time);
+      log("Word marked at: " + ms + " ms");
     }
   </script>
 </body>
